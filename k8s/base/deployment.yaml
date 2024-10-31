@@ -1,0 +1,57 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: boot-app-gradle
+  annotations:
+    alpha.image.policy.openshift.io/resolve-names: '*' # 이미지스트림을 인식 하도록 설정
+    image.openshift.io/triggers: >- # 이미지 변경시 트리거(재배포)
+      [{"from":{"kind":"ImageStreamTag","name":"boot-app-gradle:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"boot-app-gradle\")].image"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boot-app-gradle
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/scheme: "http"
+        prometheus.io/path: "/actuator/prometheus"
+      labels:
+        app: boot-app-gradle
+        deploymentconfig: boot-app-gradle
+    spec:
+      containers:
+        - name: boot-app-gradle
+          image: boot-app-gradle:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              name: kube-api-access-5lgr4
+              readOnly: true
+      volumes:
+        - name: kube-api-access-5lgr4
+          projected:
+            defaultMode: 420
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: 3607
+                  path: token
+              - configMap:
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+                  name: kube-root-ca.crt
+              - downwardAPI:
+                  items:
+                    - fieldRef:
+                        apiVersion: v1
+                        fieldPath: metadata.namespace
+                      path: namespace
+              - configMap:
+                  items:
+                    - key: service-ca.crt
+                      path: service-ca.crt
+                  name: openshift-service-ca.crt
